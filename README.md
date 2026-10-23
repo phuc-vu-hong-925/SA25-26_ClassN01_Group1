@@ -2,7 +2,7 @@
 ## Mô hình hóa và Kiểm chứng hình thức Hệ thống Nhà hàng Thông minh
 
 **Học phần:** CSE703093 – An toàn phần mềm | **Giảng viên:** ThS. Vũ Quang Dũng
-**Sinh viên:** Đặng Ngọc Đức (23010803) – Vũ Hồng Phúc (23010639) – CNTT_8
+**Sinh viên:** Đặng Ngọc Đức (23010803) – Vũ Hồng Phúc (23010639) 
 
 ---
 
