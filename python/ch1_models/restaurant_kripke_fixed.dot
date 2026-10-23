@@ -1,0 +1,107 @@
+/* ================================================================
+ * restaurant_kripke_fixed.dot  –  Bản ĐÃ SỬA (FIXED MODEL)
+ * Vẽ online: https://dreampuf.github.io/GraphvizOnline/
+ * Lệnh local: dot -Tpng restaurant_kripke_fixed.dot -o fixed.png
+ * ================================================================ */
+digraph Fixed {
+    graph [
+        rankdir  = TB
+        fontname = "Helvetica"
+        fontsize = 15
+        bgcolor  = "#0d1117"
+        label    = "Kripke – FIXED MODEL ✅\nAG(¬leak) : THỎA MÃN"
+        labelloc = t
+        fontcolor = "#00b894"
+        pad      = 0.7
+        nodesep  = 0.9
+        ranksep  = 0.65
+        splines  = curved
+    ]
+    node [
+        shape     = rectangle
+        style     = "filled,rounded"
+        fontname  = "Helvetica"
+        fontsize  = 11
+        fontcolor = white
+        margin    = "0.22,0.12"
+    ]
+    edge [
+        fontname  = "Helvetica"
+        fontsize  = 9
+        fontcolor = "#aaaaaa"
+        color     = "#666666"
+        arrowsize = 0.75
+    ]
+
+    /* ── Nodes ── */
+    idle      [label="idle\n[safe]"
+               fillcolor="#1565c0" color="#42a5f5" penwidth=3
+               shape=rectangle style="filled,rounded,bold"]
+
+    browsing  [label="browsing\n[buf_allocated]"
+               fillcolor="#4527a0" color="#9575cd"]
+
+    ordering  [label="ordering\n[buf_allocated · has_items]"
+               fillcolor="#4527a0" color="#9575cd"]
+
+    submitted [label="submitted\n[buf_allocated · has_items · sent_kitchen]"
+               fillcolor="#bf360c" color="#ff7043"]
+
+    cooking   [label="cooking\n[buf_allocated · has_items · sent_kitchen]"
+               fillcolor="#e65100" color="#ffb74d"]
+
+    served    [label="served\n[buf_allocated · served]"
+               fillcolor="#00695c" color="#4db6ac"]
+
+    paid      [label="paid\n[paid]"
+               fillcolor="#1b5e20" color="#66bb6a"]
+
+    freed     [label="freed\n[freed · safe]"
+               fillcolor="#004d40" color="#26c6da" penwidth=3]
+
+    cancelled [label="cancelled\n[cancelled]"
+               fillcolor="#7f0000" color="#ef5350"]
+
+    error     [label="error\n[handled]"
+               fillcolor="#263238" color="#90a4ae"]
+
+    timeout   [label="timeout\n[freed · safe]"
+               fillcolor="#263238" color="#90a4ae"]
+
+    /* ── Rank (xếp hàng) ── */
+    { rank=same; idle }
+    { rank=same; browsing }
+    { rank=same; ordering }
+    { rank=same; cancelled; submitted; error }
+    { rank=same; cooking;   timeout }
+    { rank=same; served }
+    { rank=same; paid }
+    { rank=same; freed }
+
+    /* ── Luồng chính (trắng) ── */
+    idle      -> browsing  [label="open_session()"]
+    browsing  -> ordering  [label="add_item()"]
+    ordering  -> submitted [label="submit_order()"]
+    submitted -> cooking   [label="kitchen_accept()"]
+    cooking   -> served    [label="kitchen_done()"]
+    served    -> paid      [label="pay()"]
+    paid      -> freed     [label="free(order)"]
+    freed     -> idle      [label="session_end()"
+                            color="#aaaaaa" style=dashed]
+
+    /* ── Nhánh thoát (xám) ── */
+    browsing  -> cancelled [label="cancel()"]
+    ordering  -> cancelled [label="cancel()"]
+    served    -> cancelled [label="cancel()"]
+    submitted -> error     [label="error"]
+    submitted -> timeout   [label="timeout"]
+    cooking   -> error     [label="error"]
+
+    /* ── FIX: tất cả đều về freed (xanh đậm) ── */
+    cancelled -> freed [label="free() ✅ FIX"
+                        color="#00b894" fontcolor="#00b894" penwidth=2.5]
+    error     -> freed [label="free() ✅ FIX"
+                        color="#00b894" fontcolor="#00b894" penwidth=2.5]
+    timeout   -> freed [label="free() ✅ FIX"
+                        color="#00b894" fontcolor="#00b894" penwidth=2.5]
+}

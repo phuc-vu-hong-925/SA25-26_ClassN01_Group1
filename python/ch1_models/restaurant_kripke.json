@@ -1,0 +1,268 @@
+{
+  "metadata": {
+    "title": "Kripke Structure – Hệ thống Nhà hàng Thông minh",
+    "description": "Mô hình hóa và Kiểm chứng hình thức luồng gọi món (F1→F6) bằng Kripke Structure. Bao gồm hai biến thể: bản lỗi (buggy) và bản đã sửa (fixed).",
+    "source_file": "python/ch1_models/restaurant_kripke.py",
+    "functions_modeled": ["F1: open_session", "F2: add_item", "F3: calc_total / split_bill", "F4: submit_order", "F5: kitchen_process", "F6: pay_or_cancel"],
+    "atomic_propositions": [
+      "safe",
+      "buf_allocated",
+      "has_items",
+      "sent_kitchen",
+      "served",
+      "paid",
+      "cancelled",
+      "freed",
+      "leak",
+      "handled"
+    ]
+  },
+
+  "models": {
+    "buggy": {
+      "name": "Restaurant Order (Bản lỗi)",
+      "description": "Biến thể lỗi: các nhánh hủy đơn (cancelled, error, timeout) trở về idle mà không qua freed → gây rò rỉ bộ nhớ.",
+      "initial_states": ["idle"],
+
+      "states": [
+        {
+          "id": "idle",
+          "description": "Hệ thống ở trạng thái chờ, chưa có phiên nào được mở.",
+          "labels": ["safe"],
+          "function": null
+        },
+        {
+          "id": "browsing",
+          "description": "Khách đang xem thực đơn; bộ đệm Order đã được cấp phát (F1: open_session).",
+          "labels": ["buf_allocated"],
+          "function": "F1: open_session"
+        },
+        {
+          "id": "ordering",
+          "description": "Khách đang thêm món ăn vào đơn (F2: add_item / F3: calc_total).",
+          "labels": ["buf_allocated", "has_items"],
+          "function": "F2: add_item, F3: calc_total/split_bill"
+        },
+        {
+          "id": "submitted",
+          "description": "Đơn đã được gửi vào hàng đợi bếp (F4: submit_order).",
+          "labels": ["buf_allocated", "has_items", "sent_kitchen"],
+          "function": "F4: submit_order"
+        },
+        {
+          "id": "cooking",
+          "description": "Bếp đang xử lý đơn (F5: kitchen_process).",
+          "labels": ["buf_allocated", "has_items", "sent_kitchen"],
+          "function": "F5: kitchen_process"
+        },
+        {
+          "id": "served",
+          "description": "Món ăn đã được phục vụ tới bàn.",
+          "labels": ["buf_allocated", "served"],
+          "function": "F6: pay_or_cancel (is_paid = 1)"
+        },
+        {
+          "id": "paid",
+          "description": "Khách đã thanh toán xong.",
+          "labels": ["paid"],
+          "function": "F6: pay_or_cancel (is_paid = 1)"
+        },
+        {
+          "id": "cancelled",
+          "description": "Đơn bị hủy bởi khách hoặc hệ thống.",
+          "labels": ["cancelled"],
+          "function": "F6: pay_or_cancel (is_paid = 0)"
+        },
+        {
+          "id": "freed",
+          "description": "Bộ nhớ đã được giải phóng đúng cách; an toàn trở về idle.",
+          "labels": ["freed", "safe"],
+          "function": "free(order)"
+        },
+        {
+          "id": "error",
+          "description": "[BUGGY] Lỗi xảy ra khi xử lý; nhãn 'leak' vì không giải phóng bộ nhớ.",
+          "labels": ["leak"],
+          "function": "error handler (buggy)"
+        },
+        {
+          "id": "timeout",
+          "description": "[BUGGY] Hết thời gian chờ; nhãn 'leak' vì không giải phóng bộ nhớ.",
+          "labels": ["leak"],
+          "function": "timeout handler (buggy)"
+        }
+      ],
+
+      "transitions": [
+        { "from": "idle",      "to": "browsing",   "label": "open_session(table_id)" },
+        { "from": "browsing",  "to": "ordering",   "label": "add_item()" },
+        { "from": "browsing",  "to": "cancelled",  "label": "cancel_session()" },
+        { "from": "ordering",  "to": "submitted",  "label": "submit_order()" },
+        { "from": "ordering",  "to": "cancelled",  "label": "cancel_order()" },
+        { "from": "submitted", "to": "cooking",    "label": "kitchen_accept()" },
+        { "from": "submitted", "to": "error",      "label": "submit_error()" },
+        { "from": "submitted", "to": "timeout",    "label": "submit_timeout()" },
+        { "from": "cooking",   "to": "served",     "label": "kitchen_done()" },
+        { "from": "cooking",   "to": "error",      "label": "cooking_error()" },
+        { "from": "served",    "to": "paid",       "label": "pay()" },
+        { "from": "served",    "to": "cancelled",  "label": "cancel_after_serve()" },
+        { "from": "paid",      "to": "freed",      "label": "free(order)" },
+        { "from": "cancelled", "to": "idle",       "label": "reset() [BUG: bo qua freed]" },
+        { "from": "error",     "to": "idle",       "label": "reset() [BUG: bo qua freed]" },
+        { "from": "timeout",   "to": "idle",       "label": "reset() [BUG: bo qua freed]" },
+        { "from": "freed",     "to": "idle",       "label": "session_end()" }
+      ],
+
+      "property_checks": {
+        "AG_no_leak": {
+          "formula": "AG(not leak)",
+          "description": "Tren moi duong di toan cau, khong bao gio co trang thai mang nhan 'leak'.",
+          "result": false,
+          "counterexample": ["idle", "browsing", "cancelled", "idle"],
+          "explanation": "Nhanh huy don di thang ve idle ma khong qua freed -> ro ri bo nho."
+        },
+        "AG_no_empty_order": {
+          "formula": "AG(not (sent_kitchen and not has_items))",
+          "description": "Khong bao gio gui don rong vao bep.",
+          "result": true,
+          "counterexample": null,
+          "explanation": "Moi trang thai mang 'sent_kitchen' deu dong thoi mang 'has_items'."
+        },
+        "AF_order_completion": {
+          "formula": "AF(served or cancelled)",
+          "description": "Don hang da gui cuoi cung luon duoc phuc vu hoac huy.",
+          "result": true,
+          "counterexample": null,
+          "explanation": "Tu 'submitted', moi duong deu den duoc 'served' hoac 'cancelled'."
+        }
+      }
+    },
+
+    "fixed": {
+      "name": "Restaurant Order (Ban da sua)",
+      "description": "Bien the dung: moi nhanh ket thuc (cancelled, error, timeout) deu bat buoc di qua freed truoc khi tro ve idle -> khong co ro ri bo nho.",
+      "initial_states": ["idle"],
+
+      "states": [
+        {
+          "id": "idle",
+          "description": "He thong o trang thai cho, chua co phien nao duoc mo.",
+          "labels": ["safe"],
+          "function": null
+        },
+        {
+          "id": "browsing",
+          "description": "Khach dang xem thuc don; bo dem Order da duoc cap phat (F1: open_session).",
+          "labels": ["buf_allocated"],
+          "function": "F1: open_session"
+        },
+        {
+          "id": "ordering",
+          "description": "Khach dang them mon an vao don (F2: add_item / F3: calc_total).",
+          "labels": ["buf_allocated", "has_items"],
+          "function": "F2: add_item, F3: calc_total/split_bill"
+        },
+        {
+          "id": "submitted",
+          "description": "Don da duoc gui vao hang doi bep (F4: submit_order).",
+          "labels": ["buf_allocated", "has_items", "sent_kitchen"],
+          "function": "F4: submit_order"
+        },
+        {
+          "id": "cooking",
+          "description": "Bep dang xu ly don (F5: kitchen_process).",
+          "labels": ["buf_allocated", "has_items", "sent_kitchen"],
+          "function": "F5: kitchen_process"
+        },
+        {
+          "id": "served",
+          "description": "Mon an da duoc phuc vu toi ban.",
+          "labels": ["buf_allocated", "served"],
+          "function": "F6: pay_or_cancel (is_paid = 1)"
+        },
+        {
+          "id": "paid",
+          "description": "Khach da thanh toan xong.",
+          "labels": ["paid"],
+          "function": "F6: pay_or_cancel (is_paid = 1)"
+        },
+        {
+          "id": "cancelled",
+          "description": "Don bi huy boi khach hoac he thong.",
+          "labels": ["cancelled"],
+          "function": "F6: pay_or_cancel (is_paid = 0)"
+        },
+        {
+          "id": "freed",
+          "description": "Bo nho da duoc giai phong dung cach; an toan tro ve idle.",
+          "labels": ["freed", "safe"],
+          "function": "free(order)"
+        },
+        {
+          "id": "error",
+          "description": "[FIXED] Loi xay ra khi xu ly; nhan 'handled' vi se duoc don dep dung.",
+          "labels": ["handled"],
+          "function": "error handler (fixed)"
+        },
+        {
+          "id": "timeout",
+          "description": "[FIXED] Het thoi gian cho; nhan 'freed','safe' vi se duoc don dep dung.",
+          "labels": ["freed", "safe"],
+          "function": "timeout handler (fixed)"
+        }
+      ],
+
+      "transitions": [
+        { "from": "idle",      "to": "browsing",   "label": "open_session(table_id)" },
+        { "from": "browsing",  "to": "ordering",   "label": "add_item()" },
+        { "from": "browsing",  "to": "cancelled",  "label": "cancel_session()" },
+        { "from": "ordering",  "to": "submitted",  "label": "submit_order()" },
+        { "from": "ordering",  "to": "cancelled",  "label": "cancel_order()" },
+        { "from": "submitted", "to": "cooking",    "label": "kitchen_accept()" },
+        { "from": "submitted", "to": "error",      "label": "submit_error()" },
+        { "from": "submitted", "to": "timeout",    "label": "submit_timeout()" },
+        { "from": "cooking",   "to": "served",     "label": "kitchen_done()" },
+        { "from": "cooking",   "to": "error",      "label": "cooking_error()" },
+        { "from": "served",    "to": "paid",       "label": "pay()" },
+        { "from": "served",    "to": "cancelled",  "label": "cancel_after_serve()" },
+        { "from": "paid",      "to": "freed",      "label": "free(order)" },
+        { "from": "cancelled", "to": "freed",      "label": "free(order) [FIX]" },
+        { "from": "error",     "to": "freed",      "label": "free(order) [FIX]" },
+        { "from": "timeout",   "to": "freed",      "label": "free(order) [FIX]" },
+        { "from": "freed",     "to": "idle",       "label": "session_end()" }
+      ],
+
+      "property_checks": {
+        "AG_no_leak": {
+          "formula": "AG(not leak)",
+          "description": "Tren moi duong di toan cau, khong bao gio co trang thai mang nhan 'leak'.",
+          "result": true,
+          "counterexample": null,
+          "explanation": "Moi nhanh deu di qua freed truoc khi tro ve idle -> khong con duong ro ri bo nho."
+        },
+        "AG_no_empty_order": {
+          "formula": "AG(not (sent_kitchen and not has_items))",
+          "description": "Khong bao gio gui don rong vao bep.",
+          "result": true,
+          "counterexample": null,
+          "explanation": "Moi trang thai mang 'sent_kitchen' deu dong thoi mang 'has_items'."
+        },
+        "AF_order_completion": {
+          "formula": "AF(served or cancelled)",
+          "description": "Don hang da gui cuoi cung luon duoc phuc vu hoac huy.",
+          "result": true,
+          "counterexample": null,
+          "explanation": "Tu 'submitted', moi duong deu den duoc 'served' hoac 'cancelled'."
+        }
+      }
+    }
+  },
+
+  "comparison": {
+    "key_difference": "Su khac biet nam o cac chuyen tiep tu cancelled, error, timeout.",
+    "buggy_transitions":  ["cancelled -> idle", "error -> idle", "timeout -> idle"],
+    "fixed_transitions":  ["cancelled -> freed -> idle", "error -> freed -> idle", "timeout -> freed -> idle"],
+    "violated_property_in_buggy": "AG(not leak)",
+    "all_properties_hold_in_fixed": true
+  }
+}

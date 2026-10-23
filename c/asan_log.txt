@@ -1,0 +1,33 @@
+=================================================================
+DEMO BAN CO LOI (BUGGY VERSION) - HE THONG NHA HANG THONG MINH
+=================================================================
+
+[1] TEST F1 - Mo ban voi table_id = 999 (ngoai khoang [1, 50]):
+    --> [VI PHAM INPUT] He thong chap nhan table_id = 999 (Thieu guard kiem tra)!
+
+[2] TEST F2 - Them mon co do dai ten 60 byte (buffer chi co 32 byte):
+    --> [BUFFER OVERFLOW CWE-120] strcpy da copy 58 byte vao vung nho 32 byte!
+
+[3] TEST F2 - Them lien tiep 22 mon vao mang quy dinh MAX_ITEMS = 20:
+test_order_buggy.c:48:24: runtime error: index 20 out of bounds for type 'OrderItem [20]'
+test_order_buggy.c:49:17: runtime error: index 20 out of bounds for type 'OrderItem [20]'
+test_order_buggy.c:50:17: runtime error: index 20 out of bounds for type 'OrderItem [20]'
+    --> [INDEX OOB CWE-129] Da ghi den phan tu thu items[22] (Vuot bien mang 20 phan tu)!
+
+[4] TEST F3 - Tinh tong tien khi gia tri nhan vuot nguong int32:
+test_order_buggy.c:60:51: runtime error: signed integer overflow: 80 * 1736074747 cannot be represented in type 'int'
+    --> Tich: 80 * 1,736,074,747 = 138 ty > INT32_MAX (2,147,483,647)
+    --> [INTEGER OVERFLOW CWE-190] Tong tien bi wrap-around: 1447026288 VND (Gia tri am/sai)!
+
+[5] TEST F3 - Chia hoa don khi khach nhap so nguoi = 0:
+    [LOI SO HOC CWE-369] n_guests = 0! Phep tinh total / 0 gay Divide-By-Zero Crash!
+
+[6] TEST F6 - Khach huy don hang:
+    [LOI RO RI BO NHO CWE-401] Khach huy don nhung he thong QUEN goi free(order)!
+    --> Dia chi heap 0x75b79a3e0080 bi bo roi (Leak 100% tai nguyen Order)!
+    [LOI RO RI BO NHO CWE-401] Khach huy don nhung he thong QUEN goi free(order)!
+    --> Dia chi heap 0x75b79a3e0580 bi bo roi (Leak 100% tai nguyen Order)!
+
+=================================================================
+KET LUAN BAN LOI: Xac nhan thanh cong su ton tai cua 4 loai loi!
+=================================================================
